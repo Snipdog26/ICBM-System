@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.33328.57
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fire Control System", "ICBM System\Fire Control System.csproj", "{1DEC8295-AC1E-42BE-A496-3A691C70BD12}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nuclear Guidance System", "ICBM_GS\Nuclear Guidance System.csproj", "{5E0239F0-F59F-4FE6-8036-D1AD283F3EE6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1DEC8295-AC1E-42BE-A496-3A691C70BD12}.Debug|x64.ActiveCfg = Debug|x64
+		{1DEC8295-AC1E-42BE-A496-3A691C70BD12}.Debug|x64.Build.0 = Debug|x64
+		{5E0239F0-F59F-4FE6-8036-D1AD283F3EE6}.Debug|x64.ActiveCfg = Debug|x64
+		{5E0239F0-F59F-4FE6-8036-D1AD283F3EE6}.Debug|x64.Build.0 = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1CA9CDE4-1AF4-4D94-9AC7-BB8C1EC0B5AF}
+	EndGlobalSection
+EndGlobal
