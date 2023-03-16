@@ -57,9 +57,9 @@ namespace IngameScript
             _missileNameTag = "ICBM",
             _fireControlGroupName = "Fire Control",
             _referenceNameTag = "Reference",
-            _lastX = "",
-            _lastY = "",
-            _lastZ = "";
+            _lastX = "0",
+            _lastY = "0",
+            _lastZ = "0";
         double
             _autoFireInterval = 1,
             _timeSinceAutoFire = 141,
@@ -67,6 +67,8 @@ namespace IngameScript
             _activeAntennaRange = 5000,
             _minRaycastRange = 50,
             _maxRaycastRange = 5000,
+            _minGpsRange = 1000,
+            _maxGpsRange = 150000,
             _maxTimeForLockBreak = 3,
             _searchScanRandomSpread = 0,
             _doubleX = 0,
@@ -105,9 +107,9 @@ namespace IngameScript
             UNICAST_TAG = "UNICAST",
             // General config
             INI_SECTION_GPS = "FCS - Target GPS Coordinates",
-            INI_GPS_TARGET_X = "0",
-            INI_GPS_TARGET_Y = "0",
-            INI_GPS_TARGET_Z = "0",
+            INI_GPS_TARGET_X = "X",
+            INI_GPS_TARGET_Y = "Y",
+            INI_GPS_TARGET_Z = "Z",
             INI_SECTION_GENERAL = "LAMP - General Config",
             INI_FIRE_GROUP_NAME = "Fire control group name",
             INI_MSL_NAME = "Missile group name tag",
@@ -345,8 +347,7 @@ namespace IngameScript
             _raycastHoming = new RaycastHoming(_maxRaycastRange, _maxTimeForLockBreak, _minRaycastRange, Me.CubeGrid.EntityId);
             _raycastHoming.AddEntityTypeToFilter(MyDetectedEntityType.FloatingObject, MyDetectedEntityType.Planet, MyDetectedEntityType.Asteroid);
 
-            _gpsHoming = new GPSHoming(1000,150000,Me.CubeGrid.EntityId);
-
+            _gpsHoming = new GPSHoming(_maxGpsRange,_minGpsRange,Me.CubeGrid.EntityId);
             _screenHandler = new MissileStatusScreenHandler(this);
 
             _isSetup = GrabBlocks();
@@ -357,7 +358,7 @@ namespace IngameScript
 
             float step = 1f / 9f;
             _screenUpdateBuffer = new CircularBuffer<Action>(10);
-            _screenUpdateBuffer.Add(() => _screenHandler.ComputeScreenParams(DesignationMode, _allowedGuidanceEnum, _lockStrength, _statusText, _statusColor, _maxRaycastRange, _inGravity, _stealth, _spiral, _topdown, _usePreciseAiming, _autoFire, _fireEnabled));
+            _screenUpdateBuffer.Add(() => _screenHandler.ComputeScreenParams(DesignationMode, _allowedGuidanceEnum, _lockStrength, _statusText, _statusColor, _gpsHoming.MaxRange, _inGravity, _stealth, _spiral, _topdown, _usePreciseAiming, _autoFire, _fireEnabled));
             _screenUpdateBuffer.Add(() => _screenHandler.DrawScreens(_textSurfaces, 0 * step, 1 * step, _clearSpriteCache));
             _screenUpdateBuffer.Add(() => _screenHandler.DrawScreens(_textSurfaces, 1 * step, 2 * step, _clearSpriteCache));
             _screenUpdateBuffer.Add(() => _screenHandler.DrawScreens(_textSurfaces, 2 * step, 3 * step, _clearSpriteCache));
@@ -578,18 +579,6 @@ namespace IngameScript
         }
 
         #region Guidance Moding
-        void HandleOptical(ref bool shouldBroadcast)
-        {
-            shouldBroadcast = true;
-            OpticalGuidance();
-            ScaleAntennaRange(_activeAntennaRange);
-            StopAllSounds();
-
-            // Status
-            _statusText = BEAM_RIDE_ACTIVE;
-            _targetingStatus = TargetingStatus.Targeting;
-        }
-
         void HandleCameraHoming(ref bool shouldBroadcast)
         {
             _raycastHoming.Update(UpdateTime, _cameraList, _shipControllers, _reference);
@@ -663,8 +652,9 @@ namespace IngameScript
 
         void HandleGPSHoming(ref bool shouldBroadcast)
         {
+            HandleGPS_INI();
             _gpsHoming.Update();
-            _statusText = GPS_WAITING;
+
             // cry about the nesting
             if (_gpsHoming._targetPosition != new Vector3D(0,0,0))
             {
@@ -685,6 +675,8 @@ namespace IngameScript
 
                 }
             }
+            else
+            { _statusText = GPS_WAITING; }
             PlayLockOnSound(_soundBlocks);
             HandleAutofire_gps(_gpsHoming._targetPosition);
         }
@@ -1003,7 +995,7 @@ namespace IngameScript
             {
                 bool allowed = (DesignationMode == GuidanceMode.Camera && _raycastHoming.Status == RaycastHoming.TargetingStatus.Locked);
                 allowed |= (DesignationMode == GuidanceMode.BeamRiding);
-                allowed |= (DesignationMode == GuidanceMode.GPS && _gpsHoming.Status == GPSHoming.TargetingStatus.Locked);
+                allowed |= (DesignationMode == GuidanceMode.GPS && _gpsHoming._targetPosition != new Vector3D(0,0,0) && _gpsHoming.canFire());
                 allowed &= _fireEnabled;
                 return allowed;
             }
@@ -1020,6 +1012,7 @@ namespace IngameScript
             switch (_args.Argument(0).ToLowerInvariant())
             {
                 #region fire and kill commands
+
                 case "enable_fire":
                     _fireEnabled = true;
                     break;
@@ -1028,7 +1021,7 @@ namespace IngameScript
                     _fireEnabled = false;
                     break;
 
-                case "fire":
+                case "fire": 
                     if (FiringAllowed)
                     {
                         int count = 1, start = 0, end = -1;
@@ -1064,6 +1057,7 @@ namespace IngameScript
                     }
                     else
                     {
+                        Echo("DEAT");
                         PlayFireAbortSound(_soundBlocks);
                     }
                     break;
@@ -1096,6 +1090,7 @@ namespace IngameScript
                         PlayFireAbortSound(_soundBlocks);
                     }
                     break;
+
                 #endregion
 
                 #region stealth toggle
@@ -1367,6 +1362,14 @@ namespace IngameScript
             return true;
         }
 
+        void HandleGPS_INI()
+        {
+            _doubleX = _setupIni.Get(INI_SECTION_GPS, INI_GPS_TARGET_X).ToDouble();
+            _doubleY = _setupIni.Get(INI_SECTION_GPS, INI_GPS_TARGET_Y).ToDouble();
+            _doubleZ = _setupIni.Get(INI_SECTION_GPS, INI_GPS_TARGET_Z).ToDouble();
+            _gpsHoming.UpdateTarget(new Vector3D(_doubleX, _doubleY, _doubleZ));
+            HandleIni();
+        }
         void HandleIni()
         {
             _setupIni.Clear();
@@ -1375,15 +1378,16 @@ namespace IngameScript
                    limitStr = DEFAULT_MISSILE_LIMIT;
             if (_setupIni.TryParse(Me.CustomData))
             {
+                _lastX = _setupIni.Get(INI_SECTION_GPS, _lastX).ToString("0");
+                _lastY = _setupIni.Get(INI_SECTION_GPS, _lastY).ToString("0");
+                _lastZ = _setupIni.Get(INI_SECTION_GPS, _lastZ).ToString("0");
                 _fireControlGroupName = _setupIni.Get(INI_SECTION_GENERAL, INI_FIRE_GROUP_NAME).ToString(_fireControlGroupName);
                 _missileNameTag = _setupIni.Get(INI_SECTION_GENERAL, INI_MSL_NAME).ToString(_missileNameTag);
                 _referenceNameTag = _setupIni.Get(INI_SECTION_GENERAL, INI_REFERENCE_NAME).ToString(_referenceNameTag);
                 _autoFire = _setupIni.Get(INI_SECTION_GENERAL, INI_AUTO_FIRE).ToBoolean(_autoFire);
                 _autoFireRemote = _setupIni.Get(INI_SECTION_GENERAL, INI_AUTO_FIRE_REMOTE).ToBoolean(_autoFireRemote);
-                _doubleX = _setupIni.Get(INI_SECTION_GPS, _lastX).ToDouble(_doubleX);
-                _doubleY = _setupIni.Get(INI_SECTION_GPS, _lastY).ToDouble(_doubleY);
-                _doubleZ = _setupIni.Get(INI_SECTION_GPS, _lastZ).ToDouble(_doubleZ);
-                _gpsHoming.UpdateTarget(new Vector3D(_doubleX, _doubleY, _doubleZ));
+
+                //_gpsHoming.UpdateTarget(new Vector3D(_doubleX, _doubleY, _doubleZ));
                 string temp = _setupIni.Get(INI_SECTION_GENERAL, INI_AUTO_MSL_LIMIT).ToString(limitStr);
                 int limit;
                 if (int.TryParse(temp, out limit) && limit > 0)
@@ -1443,9 +1447,9 @@ namespace IngameScript
                 _setupIni.Clear();
                 _setupIni.EndContent = Me.CustomData;
             }
-            _setupIni.Set(INI_SECTION_GPS, INI_GPS_TARGET_X, _lastX);
-            _setupIni.Set(INI_SECTION_GPS, INI_GPS_TARGET_Y, _lastY);
-            _setupIni.Set(INI_SECTION_GPS, INI_GPS_TARGET_Z, _lastZ);
+            //_setupIni.Set(INI_SECTION_GPS, INI_GPS_TARGET_X, _lastX);
+            //_setupIni.Set(INI_SECTION_GPS, INI_GPS_TARGET_Y, _lastY);
+            //_setupIni.Set(INI_SECTION_GPS, INI_GPS_TARGET_Z, _lastZ);
             _setupIni.Set(INI_SECTION_GENERAL, INI_FIRE_GROUP_NAME, _fireControlGroupName);
             _setupIni.Set(INI_SECTION_GENERAL, INI_MSL_NAME, _missileNameTag);
             _setupIni.Set(INI_SECTION_GENERAL, INI_REFERENCE_NAME, _referenceNameTag);
@@ -1831,6 +1835,7 @@ namespace IngameScript
             {
                 IGC.SendUnicastMessage(pb.EntityId, IGC_TAG_FIRE, "");
                 firedMissileProgramAge[pb] = 0;
+
             }
 
             OpenSiloDoor(missileNumber);
@@ -2739,8 +2744,8 @@ namespace IngameScript
             public bool IsScanning { get; private set; } = false;
             public double TimeSinceLastLock { get; private set; } = 0;
             public double TargetSize { get; private set; } = 0;
-            public double MaxRange { get; private set; }
-            public double MinRange { get; private set; }
+            public double MaxRange { get;  set; } = 150000;
+            public double MinRange { get; set; } = 1000;
             public long TargetId { get; private set; } = 0;
             public double AutoScanInterval { get; private set; } = 0;
             public double MaxTimeForLockBreak { get; private set; }
@@ -3196,14 +3201,16 @@ namespace IngameScript
         {
             public Vector3D _targetPosition { get; private set; } = new Vector3D(0, 0, 0);
             public TargetingStatus Status { get; private set; } = TargetingStatus.NotLocked;
-            public double MaxRange { get; private set; }
-            public double Distance { get; private set; }
-            public double MinRange { get; private set; }
-            public bool Armed { get; private set; } = false;
+            public double MaxRange { get; private set; } = 150000;
+            public double Distance { get; private set; } = 2000;
+            public double MinRange { get; private set; } = 1000;
+            public bool Armed { get; private set; } = true;
             public enum TargetingStatus { NotLocked, Locked, TooClose, OutOfRange };
             HashSet<long> _gridIDsToIgnore = new HashSet<long>();
-            public GPSHoming(double MaxRange,double MinRange,long selfIdToIgnore = 0)
+            public GPSHoming(double maxRange,double minRange,long selfIdToIgnore = 0)
             {
+                MaxRange = maxRange;
+                MinRange = minRange;
                 AddIgnoredGridID(selfIdToIgnore);
             }
             public void AddIgnoredGridID(long id)

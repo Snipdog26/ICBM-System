@@ -42,65 +42,11 @@ namespace IngameScript
         // https://github.com/malware-dev/MDK-SE/wiki/Quick-Introduction-to-Space-Engineers-Ingame-Scripts
         //
         // to learn more about ingame scripts.
-
+        
         #region WHAM
         const string VERSION = "170.4.3";
         const string DATE = "2022/10/16";
         const string COMPAT_VERSION = "95.0.0";
-
-        /*
-        / //// / (WHAM) Whip's Homing Advanced Missile Script / //// /
-        _______________________________
-            INSTRUCTIONS
-
-        See workshop page for instructions, there is no room left in this script!
-
-        _______________________________
-            NOTE
-
-        This code has been minified so that it will fit in the programmable block.
-        I have NOT obfuscated any of the code, so that if you copy paste this into an
-        IDE like Visual Studio or use a website like https://codebeautify.org/csharpviewer,
-        you can uncompress this and it will be human readable.
-
-
-
-
-        =================================================
-            DO NOT MODIFY VARIABLES IN THE SCRIPT!
-
-         USE THE CUSTOM DATA OF THIS PROGRAMMABLE BLOCK!
-        =================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        HEY! DONT EVEN THINK ABOUT TOUCHING BELOW THIS LINE!
-
-        */
-
         #region Global Fields
 
         int _guidanceAlgoIndex = 0;
@@ -130,8 +76,8 @@ namespace IngameScript
             _aimDispersion;
 
         string
-            _missileGroupNameTag = "",
-            _missileNameTag = "",
+            _missileGroupNameTag = "ICBM",
+            _missileNameTag = "ICBM",
             _missileTag = "ICBM",
             _fireControlGroupNameTag = "Fire Control",
             _detachThrustTag = "Detach";
@@ -163,7 +109,9 @@ namespace IngameScript
             _timeSinceLastLock = 0,
             _distanceFromShooter = 0,
             _timeTotal = 0,
-            _timeSinceLastIngest = 0;
+            _timeSinceLastIngest = 0,
+            _maxRange = 150000,
+            _minRange = 1000;
 
         int
             _missileNumber = 1,
@@ -415,7 +363,7 @@ namespace IngameScript
 
             _raycastHoming = new RaycastHoming(5000, 3, 0, Me.CubeGrid.EntityId);
             _raycastHoming.AddEntityTypeToFilter(MyDetectedEntityType.FloatingObject, MyDetectedEntityType.Planet, MyDetectedEntityType.Asteroid);
-            _gpsHoming = new GPSHoming();
+            _gpsHoming = new GPSHoming(_maxRange,_minRange,Me.CubeGrid.EntityId);
 
             // Init guidance
             _proNavGuid = new ProNavGuidance(UPDATES_PER_SECOND, _navConstant);
@@ -516,7 +464,7 @@ namespace IngameScript
                 // handoff
                 _guidanceMode = GuidanceMode.Active;
 
-                _targetPos = _raycastHoming.TargetPosition;
+                //_targetPos = _raycastHoming.TargetPosition;
                 _targetVel = _raycastHoming.TargetVelocity;
                 _timeSinceLastLock = _raycastHoming.TimeSinceLastLock;
 
@@ -526,6 +474,7 @@ namespace IngameScript
             else if (_raycastHoming.LockLost)
             {
                 _guidanceMode = GuidanceMode.SemiActive;
+
             }
         }
 
@@ -860,7 +809,7 @@ namespace IngameScript
                 _retask = false;
                 Vector3D hitPos = payload.Item1.Col0;
                 Vector3D offset = payload.Item2.Col0;
-                _targetPos = payload.Item1.Col1;
+               //_targetPos = payload.Item1.Col1;
                 _targetVel = payload.Item1.Col2;
                 _timeSinceLastLock = payload.Item3;
                 long targetId = payload.Item4;
@@ -880,7 +829,7 @@ namespace IngameScript
             */
             while (_broadcastListenerGPS.HasPendingMessage)
             {
-                object messageData = _broadcastListenerHoming.AcceptMessage().Data;
+                object messageData = _broadcastListenerGPS.AcceptMessage().Data;
 
                 if (!(messageData is MyTuple<Vector3D, long>))
                     continue;
@@ -896,9 +845,14 @@ namespace IngameScript
 
                 _retask = false;
 
-                _targetPos = payload.Item1;
-                _targetVel = new Vector3D(0, 0, 0); // Still used 
-                _guidanceMode = GuidanceMode.GPS;
+                _gpsHoming.UpdateTarget(payload.Item1);
+                   _targetPos = payload.Item1;
+                 //_targetPos = new Vector3D(127393.584098575, 192657.93774542, 5732848.23664607);
+                 _targetVel = new Vector3D(0, 0, 0); // Still used 
+                 _guidanceMode = GuidanceMode.GPS;
+                  // _targetPos = new Vector3D(127393.584098575, 192657.93774542, 5732848.23664607);
+
+
             }
         }
 
@@ -1824,6 +1778,17 @@ namespace IngameScript
             out Vector3D adjustedTargetPos)
         {
             adjustedTargetPos = _targetPos;
+            adjustedTargetPos = new Vector3D(_targetPos.X, _targetPos.Y, _targetPos.Z);
+            if (adjustedTargetPos == new Vector3D(1, 0, 0))
+            {
+
+                Detonate(0);
+            }
+            else
+            {
+                adjustedTargetPos = new Vector3D(127393.584098575, 192657.93774542, 5732848.23664607);
+            }
+
 
             if (_topDownAttack && gravityVec.LengthSquared() > 1e-3 && !_shouldDive)
             {
@@ -3485,7 +3450,7 @@ namespace IngameScript
         #endregion
         class GPSHoming
         {
-            public Vector3D _targetPosition { get; private set; } = new Vector3D(0, 0, 0);
+            public Vector3D _targetPosition { get; private set; }
             public TargetingStatus Status { get; private set; } = TargetingStatus.NotLocked;
             public double MaxRange { get; private set; }
             public double Distance { get; private set; }
@@ -3551,6 +3516,7 @@ namespace IngameScript
                 {
                     pointingVector = GravityCompensation(missileAcceleration, pointingVector, gravity.Value);
                 }
+           
                 return pointingVector;
             }
 
