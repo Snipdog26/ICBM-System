@@ -140,7 +140,7 @@ namespace IngameScript
             _canSetup = true,
             _preSetupFailed = false,
             _remotelyFired = false,
-            _topDownAttack = false,
+            _topDownAttack = true,
             _cruiseMisileTrajectory = false,
             _enableEvasion = false,
             _precisionMode = false,
@@ -211,7 +211,7 @@ namespace IngameScript
             SECONDS_PER_UPDATE = 1.0 / UPDATES_PER_SECOND,
             DEG_TO_RAD = Math.PI / 180,
             RPM_TO_RAD = Math.PI / 30,
-            TOPDOWN_DESCENT_ANGLE = Math.PI / 6,
+            TOPDOWN_DESCENT_ANGLE = Math.PI / 8,
             MAX_GUIDANCE_TIME = 180,
             RUNTIME_TO_REALTIME = (1.0 / 60.0) / 0.0166666,
             GYRO_SLOWDOWN_ANGLE = Math.PI / 36;
@@ -831,10 +831,10 @@ namespace IngameScript
             {
                 object messageData = _broadcastListenerGPS.AcceptMessage().Data;
 
-                if (!(messageData is MyTuple<Vector3D, long>))
+                if (!(messageData is MyTuple<Vector3D, long, Vector3D>))
                     continue;
 
-                var payload = (MyTuple<Vector3D, long>)messageData;
+                var payload = (MyTuple<Vector3D, long, Vector3D>)messageData;
                 long keycode = payload.Item2;
 
                 if (!_savedKeycodes.Contains(keycode))
@@ -846,7 +846,8 @@ namespace IngameScript
                 _retask = false;
 
                 _gpsHoming.UpdateTarget(payload.Item1);
-                   _targetPos = payload.Item1;
+                    //_targetPos = payload.Item1;
+                    _targetPos = _gpsHoming.calculateApoapsis(payload.Item3,payload.Item1, _topDownAttackHeight);
                  //_targetPos = new Vector3D(127393.584098575, 192657.93774542, 5732848.23664607);
                  _targetVel = new Vector3D(0, 0, 0); // Still used 
                  _guidanceMode = GuidanceMode.GPS;
@@ -1779,6 +1780,7 @@ namespace IngameScript
         {
             adjustedTargetPos = _targetPos;
             adjustedTargetPos = new Vector3D(_targetPos.X, _targetPos.Y, _targetPos.Z);
+            
             if (adjustedTargetPos == new Vector3D(1, 0, 0))
             {
 
@@ -1788,11 +1790,15 @@ namespace IngameScript
             {
                 adjustedTargetPos = new Vector3D(127393.584098575, 192657.93774542, 5732848.23664607);
             }
-
+            // Start Descent
+            if (_topDownAttack && _gpsHoming.pastApoapsis())
+            {
+                adjustedTargetPos= _gpsHoming.beginDescentCalculation();
+            }
 
             if (_topDownAttack && gravityVec.LengthSquared() > 1e-3 && !_shouldDive)
             {
-                if (VectorMath.AngleBetween(adjustedTargetPos - missilePos, gravityVec) < TOPDOWN_DESCENT_ANGLE)
+                if (VectorMath.AngleBetween(adjustedTargetPos - missilePos, gravityVec) < TOPDOWN_DESCENT_ANGLE && _gpsHoming.pastApoapsis())
                 {
                     _shouldDive = true;
                 }
@@ -3451,6 +3457,7 @@ namespace IngameScript
         class GPSHoming
         {
             public Vector3D _targetPosition { get; private set; }
+            public Vector3D _targetPlanetOrigin { get; private set;  }
             public TargetingStatus Status { get; private set; } = TargetingStatus.NotLocked;
             public double MaxRange { get; private set; }
             public double Distance { get; private set; }
@@ -3458,8 +3465,10 @@ namespace IngameScript
             public bool Armed { get; private set; } = false;
             public enum TargetingStatus { NotLocked, Locked, TooClose, OutOfRange };
             HashSet<long> _gridIDsToIgnore = new HashSet<long>();
-            public GPSHoming(double MaxRange, double MinRange, long selfIdToIgnore = 0)
+            public GPSHoming(double maxRange, double minRange, long selfIdToIgnore = 0)
             {
+                MaxRange = maxRange;
+                MinRange = minRange;
                 AddIgnoredGridID(selfIdToIgnore);
             }
             public void AddIgnoredGridID(long id)
@@ -3475,14 +3484,52 @@ namespace IngameScript
             {
                 return (Distance < MaxRange);
             }
+            public bool pastApoapsis()
+            {
+                /*
+                 True when rocket
+                    is over 'h' in suborbital flight
+                    beginning of missile descent onto target.
+                 */
+
+            }
+            public Vector3D calculateApoapsis(Vector3D launchLocation,Vector3D strikeLocation, double cruiseHeight)
+            {
+
+                /*
+                 Find point midway from Point A and B
+                 */
+
+                Vector3D midpoint = (launchLocation - strikeLocation) / 2;
+                Vector3D nM = Vector3D.Normalize(midpoint - _targetPlanetOrigin);
+                double r1 = Vector3D.Distance(launchLocation, _targetPlanetOrigin);
+                double r2 = Vector3D.Distance(strikeLocation, _targetPlanetOrigin);
+                double rf = (r1 + r2) / 2;
+                double dmo = Vector3D.Distance(midpoint, _targetPlanetOrigin);
+                Vector3D adjR = nM * (rf - dmo);
+                Vector3D depthBelowSurface = (midpoint + adjR);
+                Vector3D assumedApoapsisSurfaceHeight = (midpoint + depthBelowSurface);
+                Vector3D cruiseHeightVector = (nM * cruiseHeight);
+                Vector3D Apoapsis = assumedApoapsisSurfaceHeight + cruiseHeightVector;
+           
+            }
+            public Vector3D beginDescentCalculation()
+            {
+                return _targetPosition;
+            }
             public void Update()
             {
 
             }
             public void UpdateTarget(Vector3D newGpsPos)
             {
-                _targetPosition = newGpsPos;
+                _targetPosition = new Vector3D(newGpsPos.X, newGpsPos.Y, newGpsPos.Z);
             }
+            public void UpdateTargetPlanetOrigin(Vector3D targetPlanetOrigin)
+            {
+                _targetPlanetOrigin = targetPlanetOrigin;
+            }
+          
         }
         #region MissileGuidanceBase
         abstract class MissileGuidanceBase

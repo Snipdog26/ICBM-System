@@ -546,10 +546,23 @@ namespace IngameScript
                         broadcastKey);
                     break;
                 default: // GPS
-                    SendMissileGPSMessage(
+
+                    Vector3D targetPlanetOrigin;
+                    if (GetControlledShipController(_shipControllers).TryGetPlanetPosition(out targetPlanetOrigin))
+                    {
+                        SendMissileGPSMessage(
+                        Me.CubeGrid.GetPosition(),
                         _gpsHoming._targetPosition,
-                        broadcastKey
-                    );
+                        broadcastKey,
+                        targetPlanetOrigin
+                        );
+                    }
+                    else
+                    {
+                        PlayFireAbortSound(_soundBlocks);
+                    }
+
+
                     break;
             }
         }
@@ -1054,11 +1067,6 @@ namespace IngameScript
                         {
                             FireNextMissile(count);
                         }
-                    }
-                    else
-                    {
-                        Echo("DEAT");
-                        PlayFireAbortSound(_soundBlocks);
                     }
                     break;
 
@@ -2585,13 +2593,15 @@ namespace IngameScript
             IGC.SendBroadcastMessage(IGC_TAG_HOMING, payload);
         }
 
-        void SendMissileGPSMessage(Vector3D targetPosition, long keycode)
+        void SendMissileGPSMessage(Vector3D launchPosition,Vector3D targetPosition, long keycode, Vector3D targetPlanetOrigin)
         {
 
-            var payload = new MyTuple<Vector3D, long>
+            var payload = new MyTuple<Vector3D, long, Vector3D, Vector3D>
             {
                 Item1 = targetPosition, // GPS Position
                 Item2 = keycode,
+                Item3 = launchPosition,
+                Item4 = targetPlanetOrigin,
             };
 
             IGC.SendBroadcastMessage(IGC_TAG_GPS, payload);
