@@ -1791,14 +1791,14 @@ namespace IngameScript
                 adjustedTargetPos = new Vector3D(127393.584098575, 192657.93774542, 5732848.23664607);
             }
             // Start Descent
-            if (_topDownAttack && _gpsHoming.pastApoapsis())
+            if (_topDownAttack && _gpsHoming.pastApoapsis(missilePos))
             {
                 adjustedTargetPos= _gpsHoming.beginDescentCalculation();
             }
 
             if (_topDownAttack && gravityVec.LengthSquared() > 1e-3 && !_shouldDive)
             {
-                if (VectorMath.AngleBetween(adjustedTargetPos - missilePos, gravityVec) < TOPDOWN_DESCENT_ANGLE && _gpsHoming.pastApoapsis())
+                if (VectorMath.AngleBetween(adjustedTargetPos - missilePos, gravityVec) < TOPDOWN_DESCENT_ANGLE && _gpsHoming.pastApoapsis(missilePos))
                 {
                     _shouldDive = true;
                 }
@@ -3458,6 +3458,7 @@ namespace IngameScript
         {
             public Vector3D _targetPosition { get; private set; }
             public Vector3D _targetPlanetOrigin { get; private set;  }
+            public Vector3D _storedApoapsis { get; private set; } = new Vector3D (0,0,0);
             public TargetingStatus Status { get; private set; } = TargetingStatus.NotLocked;
             public double MaxRange { get; private set; }
             public double Distance { get; private set; }
@@ -3484,14 +3485,45 @@ namespace IngameScript
             {
                 return (Distance < MaxRange);
             }
-            public bool pastApoapsis()
+            public bool pastApoapsis(Vector3D _currentPos)
             {
                 /*
                  True when rocket
                     is over 'h' in suborbital flight
                     beginning of missile descent onto target.
                  */
+                if(_storedApoapsis != new Vector3D(0,0,0))
+                {
+                    return getFlightProgressPercent(_currentPos,_targetPosition) <= 50;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            /*
+             
+            180deg = 0% flight progress.
+            90deg = 50% flight progress. Closer to target than launch site.
+            22.5deg = 87.5% flight progress-> Starts descent on target
+            
+            Angle should not be lower than topDownDescentAngle as it should be 
+                on an intercept course to the target .
 
+
+
+
+             */
+            public double getAngleBWvectors(Vector3D vector1, Vector3D vector2)
+            {
+
+                return Math.Acos(Vector3D.Dot(vector1, vector2) / (vector1.Length()*vector2.Length()));
+            }
+            public double getFlightProgressPercent(Vector3D vector1, Vector3D vector2)
+            {
+                double angle = getAngleBWvectors(vector1, vector2);
+                angle *= (180 / Math.PI);
+                return (100 - (angle * (100 / 180)));
             }
             public Vector3D calculateApoapsis(Vector3D launchLocation,Vector3D strikeLocation, double cruiseHeight)
             {
@@ -3511,7 +3543,8 @@ namespace IngameScript
                 Vector3D assumedApoapsisSurfaceHeight = (midpoint + depthBelowSurface);
                 Vector3D cruiseHeightVector = (nM * cruiseHeight);
                 Vector3D Apoapsis = assumedApoapsisSurfaceHeight + cruiseHeightVector;
-           
+                _storedApoapsis = Apoapsis;
+                return Apoapsis;
             }
             public Vector3D beginDescentCalculation()
             {
