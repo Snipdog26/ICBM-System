@@ -3530,6 +3530,43 @@ namespace IngameScript
 
                 /*
                  Find point midway from Point A and B
+                    Midpoint is underground due to planets curvature.
+                 Find unit vector of midpoint.
+                    Used for calculating heights relative to the surface position of the apoapsis.
+                    unitVector = normalizedMidpoint(nM)
+                 We dont have the planets radius but we can make a virtual r value.
+                   r1 = Distance from planet origin to launchLocation
+                   r2 = Distance from planet origin to strikeLocation
+                   rf = average of r1 and r2.
+                        By averaging the values we can account for elevation differences
+                            and still get a useable radius that will work for our system
+                            This also allows for launching a missile from a mountain
+                                to hit a mountain
+                 Find the distance from the midpoint to the planet origin. (dmo)
+                    dmo or Distance Midpoint Origin
+                    dmo allows us to eventually get the surface location of the Apoapsis
+                        recall that the midpoint is underground due to the planets curvature
+                        By finding how far underground it is
+                            One can add the depth to the midpoint to get the surface location
+                            While more complicated than that. dmo is crucial to setting up
+                   adjR - Adjusted Radius
+                        recall unit vector of origin to midpoint (nM)
+                        recall the virtual radius of the planet (rf)
+                        know that (rf - dmo) = distance needed to make dmo equal to rf
+                        recall that the start of any vector of rf length starting from the origin
+                            - should end at the 'virtual' surface of the planet
+                        therefore; 'virtual' surface vector = midpoint + adjusted Radius vector
+                  Now that we have a surface point for the apoapsis, we need only to raise it
+                        recall unit vector of origin to both midpoint and now surfaceApoapsisPoint (nM)
+                        goal: raise surface vector to be at cruiseHeight above surface
+                        using nM & cruiseHeight(double)
+                        nM*cruiseHeight = Vector3D of point that is cruiseHeight long in nM direction
+                        adding this V3D, now reffered to as cruiseHeightVector, to the 'virtual' surface 
+                            located inbetween the launchLocation and StrikeLocation
+                            raised above the surface to an elevation of cruiseHeight
+
+                    While the Apoapsis is only one part of the suborbital flight system
+                        it is a cruical one.
                  */
 
                 Vector3D midpoint = (launchLocation - strikeLocation) / 2;
@@ -3539,8 +3576,8 @@ namespace IngameScript
                 double rf = (r1 + r2) / 2;
                 double dmo = Vector3D.Distance(midpoint, _targetPlanetOrigin);
                 Vector3D adjR = nM * (rf - dmo);
-                Vector3D depthBelowSurface = (midpoint + adjR);
-                Vector3D assumedApoapsisSurfaceHeight = (midpoint + depthBelowSurface);
+                //Vector3D depthBelowSurface = (midpoint + adjR);  Assumed to be a repeat var after testing.
+                Vector3D assumedApoapsisSurfaceHeight = (midpoint + adjR);
                 Vector3D cruiseHeightVector = (nM * cruiseHeight);
                 Vector3D Apoapsis = assumedApoapsisSurfaceHeight + cruiseHeightVector;
                 _storedApoapsis = Apoapsis;
