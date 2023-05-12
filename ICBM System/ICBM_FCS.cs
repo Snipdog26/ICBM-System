@@ -99,6 +99,7 @@ namespace IngameScript
             IGC_TAG_HOMING = "IGC_MSL_HOM_MSG",
             IGC_TAG_GPS = "IGC_MSL_GPS_MSG",
             IGC_TAG_BEAM_RIDING = "IGC_MSL_OPT_MSG",
+            IGC_TAG_TERMINATE = "IGC_MSL_TERM", // Must be accompanied by a missile code.
             IGC_TAG_FIRE = "IGC_MSL_FIRE_MSG",
             IGC_TAG_REMOTE_FIRE_REQUEST = "IGC_MSL_REM_REQ",
             IGC_TAG_REMOTE_FIRE_RESPONSE = "IGC_MSL_REM_RSP",

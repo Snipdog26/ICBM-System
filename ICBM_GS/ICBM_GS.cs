@@ -831,10 +831,10 @@ namespace IngameScript
             {
                 object messageData = _broadcastListenerGPS.AcceptMessage().Data;
 
-                if (!(messageData is MyTuple<Vector3D, long, Vector3D>))
+                if (!(messageData is MyTuple<Vector3D, long, Vector3D, Vector3D>))
                     continue;
 
-                var payload = (MyTuple<Vector3D, long, Vector3D>)messageData;
+                var payload = (MyTuple<Vector3D, long, Vector3D, Vector3D>)messageData;
                 long keycode = payload.Item2;
 
                 if (!_savedKeycodes.Contains(keycode))
@@ -846,6 +846,7 @@ namespace IngameScript
                 _retask = false;
 
                 _gpsHoming.UpdateTarget(payload.Item1);
+                _gpsHoming.UpdateTargetPlanetOrigin(payload.Item4);
                     //_targetPos = payload.Item1;
                     _targetPos = _gpsHoming.calculateApoapsis(payload.Item3,payload.Item1, _topDownAttackHeight);
                  //_targetPos = new Vector3D(127393.584098575, 192657.93774542, 5732848.23664607);
@@ -3456,9 +3457,9 @@ namespace IngameScript
         #endregion
         class GPSHoming
         {
-            public Vector3D _targetPosition { get; private set; }
-            public Vector3D _targetPlanetOrigin { get; private set;  }
-            public Vector3D _storedApoapsis { get; private set; } = new Vector3D (0,0,0);
+            public Vector3D _targetPosition;// { get; private set; }
+            public Vector3D _targetPlanetOrigin;// { get; private set;  }
+            public Vector3D _storedApoapsis = new Vector3D(0, 0, 0); // { get; private set; } = new Vector3D (0,0,0);
             public TargetingStatus Status { get; private set; } = TargetingStatus.NotLocked;
             public double MaxRange { get; private set; }
             public double Distance { get; private set; }
@@ -3524,6 +3525,18 @@ namespace IngameScript
                 double angle = getAngleBWvectors(vector1, vector2);
                 angle *= (180 / Math.PI);
                 return (100 - (angle * (100 / 180)));
+            }
+            public bool terminateMissile(IMyWarhead terminationHead)
+            {
+                if (terminationHead.Closed)
+                {
+                    return false;
+                }
+                else
+                {
+                    terminationHead.Detonate();
+                    return true;
+                }
             }
             public Vector3D calculateApoapsis(Vector3D launchLocation,Vector3D strikeLocation, double cruiseHeight)
             {
